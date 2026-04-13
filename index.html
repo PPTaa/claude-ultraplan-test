@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>계산기</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: #1a1a1a;
+    color: #fff;
+  }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .calculator {
+    width: 100%;
+    max-width: 360px;
+    background: #2b2b2b;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  .display {
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    text-align: right;
+    min-height: 96px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  .display .history {
+    color: #888;
+    font-size: 14px;
+    min-height: 18px;
+    word-break: break-all;
+  }
+  .display .current {
+    color: #fff;
+    font-size: 40px;
+    font-weight: 300;
+    margin-top: 4px;
+    word-break: break-all;
+    line-height: 1.1;
+  }
+  .keys {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  button {
+    border: none;
+    border-radius: 50px;
+    height: 64px;
+    font-size: 22px;
+    font-weight: 500;
+    cursor: pointer;
+    background: #444;
+    color: #fff;
+    transition: filter 0.1s, transform 0.05s;
+    font-family: inherit;
+  }
+  button:hover { filter: brightness(1.15); }
+  button:active { transform: scale(0.96); }
+  button.func { background: #6b6b6b; color: #1a1a1a; }
+  button.op { background: #ff9f0a; color: #fff; }
+  button.zero { grid-column: span 2; border-radius: 50px; }
+  @media (max-width: 380px) {
+    button { height: 56px; font-size: 20px; }
+    .display .current { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+  <div class="calculator">
+    <div class="display">
+      <div class="history" id="history"></div>
+      <div class="current" id="current">0</div>
+    </div>
+    <div class="keys">
+      <button class="func" data-action="clear">AC</button>
+      <button class="func" data-action="negate">±</button>
+      <button class="func" data-action="percent">%</button>
+      <button class="op" data-op="/">÷</button>
+
+      <button data-num="7">7</button>
+      <button data-num="8">8</button>
+      <button data-num="9">9</button>
+      <button class="op" data-op="*">×</button>
+
+      <button data-num="4">4</button>
+      <button data-num="5">5</button>
+      <button data-num="6">6</button>
+      <button class="op" data-op="-">−</button>
+
+      <button data-num="1">1</button>
+      <button data-num="2">2</button>
+      <button data-num="3">3</button>
+      <button class="op" data-op="+">+</button>
+
+      <button class="zero" data-num="0">0</button>
+      <button data-action="dot">.</button>
+      <button class="op" data-action="equals">=</button>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const state = {
+    current: "0",
+    previous: null,
+    operator: null,
+    overwrite: false,
+    error: false,
+  };
+
+  const currentEl = document.getElementById("current");
+  const historyEl = document.getElementById("history");
+
+  const OP_SYMBOL = { "+": "+", "-": "−", "*": "×", "/": "÷" };
+
+  function format(value) {
+    if (value === "Error") return "Error";
+    if (typeof value === "number") {
+      if (!isFinite(value) || isNaN(value)) return "Error";
+      let s = value.toString();
+      if (s.length > 12) s = parseFloat(value.toPrecision(10)).toString();
+      return s;
+    }
+    return value;
+  }
+
+  function render() {
+    currentEl.textContent = state.error ? "Error" : format(state.current);
+    if (state.error) {
+      historyEl.textContent = "";
+    } else if (state.previous !== null && state.operator) {
+      historyEl.textContent = `${format(state.previous)} ${OP_SYMBOL[state.operator]}`;
+    } else {
+      historyEl.textContent = "";
+    }
+  }
+
+  function resetAll() {
+    state.current = "0";
+    state.previous = null;
+    state.operator = null;
+    state.overwrite = false;
+    state.error = false;
+  }
+
+  function inputDigit(d) {
+    if (state.error) resetAll();
+    if (state.overwrite) {
+      state.current = d;
+      state.overwrite = false;
+      return;
+    }
+    if (state.current === "0") state.current = d;
+    else state.current += d;
+  }
+
+  function inputDot() {
+    if (state.error) resetAll();
+    if (state.overwrite) {
+      state.current = "0.";
+      state.overwrite = false;
+      return;
+    }
+    if (!state.current.includes(".")) state.current += ".";
+  }
+
+  function negate() {
+    if (state.error) return;
+    if (state.current === "0") return;
+    state.current = state.current.startsWith("-")
+      ? state.current.slice(1)
+      : "-" + state.current;
+  }
+
+  function percent() {
+    if (state.error) return;
+    const v = parseFloat(state.current);
+    state.current = format(v / 100);
+    state.overwrite = true;
+  }
+
+  function backspace() {
+    if (state.error) { resetAll(); return; }
+    if (state.overwrite) return;
+    if (state.current.length <= 1 || (state.current.length === 2 && state.current.startsWith("-"))) {
+      state.current = "0";
+    } else {
+      state.current = state.current.slice(0, -1);
+    }
+  }
+
+  function compute(a, b, op) {
+    switch (op) {
+      case "+": return a + b;
+      case "-": return a - b;
+      case "*": return a * b;
+      case "/": return b === 0 ? NaN : a / b;
+    }
+    return b;
+  }
+
+  function normalize(n) {
+    if (!isFinite(n) || isNaN(n)) return NaN;
+    return parseFloat(n.toPrecision(12));
+  }
+
+  function chooseOperator(op) {
+    if (state.error) return;
+    if (state.operator && state.overwrite) {
+      state.operator = op;
+      return;
+    }
+    if (state.previous === null) {
+      state.previous = state.current;
+    } else {
+      const a = parseFloat(state.previous);
+      const b = parseFloat(state.current);
+      const result = normalize(compute(a, b, state.operator));
+      if (isNaN(result)) { state.error = true; return; }
+      state.previous = format(result);
+      state.current = state.previous;
+    }
+    state.operator = op;
+    state.overwrite = true;
+  }
+
+  function equals() {
+    if (state.error) return;
+    if (state.operator === null || state.previous === null) return;
+    const a = parseFloat(state.previous);
+    const b = parseFloat(state.current);
+    const result = normalize(compute(a, b, state.operator));
+    if (isNaN(result)) { state.error = true; render(); return; }
+    state.current = format(result);
+    state.previous = null;
+    state.operator = null;
+    state.overwrite = true;
+  }
+
+  document.querySelector(".keys").addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    if (btn.dataset.num !== undefined) inputDigit(btn.dataset.num);
+    else if (btn.dataset.op) chooseOperator(btn.dataset.op);
+    else {
+      switch (btn.dataset.action) {
+        case "clear": resetAll(); break;
+        case "negate": negate(); break;
+        case "percent": percent(); break;
+        case "dot": inputDot(); break;
+        case "equals": equals(); break;
+      }
+    }
+    render();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if (/^[0-9]$/.test(k)) { inputDigit(k); render(); return; }
+    if (k === ".") { inputDot(); render(); return; }
+    if (k === "+" || k === "-" || k === "*" || k === "/") {
+      e.preventDefault();
+      chooseOperator(k); render(); return;
+    }
+    if (k === "Enter" || k === "=") { e.preventDefault(); equals(); render(); return; }
+    if (k === "Backspace") { backspace(); render(); return; }
+    if (k === "Escape") { resetAll(); render(); return; }
+    if (k === "%") { percent(); render(); return; }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
